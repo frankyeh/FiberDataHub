@@ -67,56 +67,32 @@ jobs:
           done
         done
 
-
-    - name: Create or get release
-      id: get_release
-      uses: actions/github-script@v6
+    - name: Remove & Re-upload QC TSVs via GH CLI
       env:
-        PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      with:
-        github-token: ${{ secrets.PAT_TOKEN }}
-        script: |
-          const tag = 'qc-data'
-          let rel
-          try {
-            rel = (await github.rest.repos.getReleaseByTag({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag
-            })).data
-          } catch {
-            rel = (await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: tag,
-              name: tag,
-              body: 'Automated QC TSV bundle'
-            })).data
-          }
-          core.setOutput('id', rel.id)
+        GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+      run: |
+        cd qc_files
+        RELEASE=qc-data
+        REPO=frankyeh/FiberDataHub
 
-    - name: Upload QC TSV assets
-      uses: actions/github-script@v6
-      env:
-        PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        RELEASE_ID: ${{ steps.get_release.outputs.id }}
-      with:
-        github-token: ${{ secrets.PAT_TOKEN }}
-        script: |
-          const fs   = require('fs')
-          const path = require('path')
-          const relId = parseInt(process.env.RELEASE_ID, 10)
-          const dir   = path.join(process.cwd(), 'qc_files')
-          const files = fs.readdirSync(dir).filter(f => f.endsWith('_qc.tsv'))
+        for f in *_qc.tsv; do
+          echo "⏳ Processing $f…"
 
-          for (const file of files) {
-            const data = fs.readFileSync(path.join(dir, file))
-            console.log(`Uploading ${file}…`)
-            await github.rest.repos.uploadReleaseAsset({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: relId,
-              name: file,
-              data
-            })
-          }
+          # find the existing asset ID (if any)
+          ASSET_ID=$(gh release view "$RELEASE" \
+            --repo "$REPO" \
+            --json assets \
+            -q ".assets[] | select(.name==\"$f\") | .id")
+
+          if [[ -n "$ASSET_ID" ]]; then
+            echo "🗑  Deleting existing asset $f (ID=$ASSET_ID)"
+            gh api \
+              --method DELETE \
+              /repos/frankyeh/FiberDataHub/releases/assets/"$ASSET_ID" \
+              -H "Accept: application/vnd.github+json"
+          fi
+
+          echo "⬆️  Uploading $f"
+          gh release upload "$RELEASE" "$f" \
+            --repo "$REPO"
+        done
