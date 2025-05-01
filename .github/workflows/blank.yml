@@ -1,0 +1,103 @@
+name: Plot QC Sample Counts & Publish Chart
+
+on:
+  workflow_dispatch:
+  
+jobs:
+  plot-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Install Python deps
+      run: pip install pandas matplotlib seaborn requests
+
+    - name: Generate QC counts chart
+      env:
+        PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      run: |
+        cat << 'EOF' > plot_qc_counts.py
+        #!/usr/bin/env python3
+        import os, io, requests
+        import pandas as pd
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+
+        token = os.getenv('PAT_TOKEN')
+        headers = {'Authorization': f'token {token}'}
+        # fetch qc-data release
+        resp = requests.get(
+          "https://api.github.com/repos/frankyeh/FiberDataHub/releases/tags/qc-data",
+          headers=headers)
+        resp.raise_for_status()
+        assets = resp.json().get('assets', [])
+        counts, labels = [], []
+        for a in assets:
+            name = a['name']
+            if name.endswith('_qc.tsv'):
+                r = requests.get(a['browser_download_url'], headers=headers)
+                r.raise_for_status()
+                df = pd.read_csv(io.StringIO(r.text), sep='\t')
+                df = df[df['neighboring DWI correlation(masked)'] <= 1]
+                df = df[df['DWI contrast'] != 1]
+                counts.append(len(df))
+                labels.append(name.replace('_qc.tsv',''))
+        # plot
+        plt.figure(figsize=(8, max(4,len(labels)*0.4)), dpi=100)
+        sns.barplot(x=counts, y=labels, palette='tab10')
+        plt.xlabel('Sample Count (filtered)')
+        plt.ylabel('Dataset')
+        plt.title('QC Sample Counts per Dataset')
+        plt.tight_layout()
+        plt.savefig('qc_counts.png')
+        EOF
+        python plot_qc_counts.py
+
+    - name: Create or get chart release
+      id: get_chart_release
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.PAT_TOKEN }}
+        script: |
+          const tag = 'qc-chart'
+          let rel
+          try {
+            rel = (await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag
+            })).data
+          } catch {
+            rel = (await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: tag,
+              body: 'Automated QC sample count chart'
+            })).data
+          }
+          core.setOutput('id', rel.id)
+
+    - name: Upload chart image
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.PAT_TOKEN }}
+        script: |
+          const fs   = require('fs')
+          const relId = parseInt(core.getInput('id'), 10)
+          const data = fs.readFileSync('qc_counts.png')
+          await github.rest.repos.uploadReleaseAsset({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            release_id: relId,
+            name: 'qc_counts.png',
+            data
+          })
+
