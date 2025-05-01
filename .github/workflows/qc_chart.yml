@@ -59,49 +59,59 @@ jobs:
         # extract accounts for the title
         accounts = sorted({lbl.split('_')[0] for lbl in labels})
 
-        fig, ax = plt.subplots(figsize=(40, 3), dpi=100)
-        x, y_bar = 0, 2
-        for i, (ct, col, lbl) in enumerate(zip(counts, colors, labels)):
+        fig, ax = plt.subplots(figsize=(20, 3), dpi=100)
+        x = 0
+        prev_ct, prev_ct2 = 1000, 1000
+        prev_offset, prev_offset2 = 0.25, 0.25
+        grand_total     = sum(counts)
+        
+        label_toggle = False       # alternates only when we actually *draw* a label
+        
+        for ct, col, lbl in zip(counts, colors, labels):
             # draw the bar segment
-            ax.barh(y_bar, ct, left=x, height=0.6, color=col, edgecolor="white")
+            ax.barh(2, ct, left=x, height=0.2, color=col, edgecolor="white")
+            cx = x + ct / 2
         
-            # center of this segment
-            cx = x + ct/2
-        
-            # choose label y-position and whether it's "above" (top) or "below"
-            if i % 2 == 0:
-                y_txt = 1.5 - (i % 5)*0.1
-                is_top = True
+            # choose y-offset
+            if prev_ct + prev_ct2 < 1000:
+                y_offset = 0.35 if prev_offset2 == 0.25 else 0.25
             else:
-                y_txt = 2.5 + (i % 5)*0.1
-                is_top = False
+                y_offset = 0.15
         
-            # draw pointer line
-            delta   = y_bar - y_txt
-            y_start = y_txt + delta * 0.25
-            y_end   = y_bar - delta * 0.25
-            ax.plot([cx, cx], [y_start, y_end], color="black", lw=1)
+            if ct > 100:        # draw label only for sizeable segments
+                # decide above / below using toggle
+                if label_toggle:
+                    y_txt, is_top = 2 + y_offset, False
+                else:
+                    y_txt, is_top = 2 - y_offset, True
+                label_toggle = not label_toggle      # flip for next drawn label
         
+                # pointer line (30 % of vertical gap)
+                delta = 2 - y_txt
+                y_start = y_txt + delta * 0.3
+                y_end   = 2
+                ax.plot([cx, cx], [y_start, y_end], color="black", lw=1)
         
-            # build the two‐line text: repo‐name and sample size
-            repo_name = lbl.split('_')[-1]
-            sample_text = f"(n={ct})"
-            if is_top:
-                text = f"{sample_text}\n{repo_name}"
-            else:
-                text = f"{repo_name}\n{sample_text}"
+                # label text
+                repo_name   = lbl.split('_')[-1]
+                sample_text = f"(n={ct})"
+                text = f"{repo_name}\n{sample_text}" if is_top else f"{sample_text}\n{repo_name}"
+                ax.text(cx, y_txt, text, ha="center", va="center", fontsize=8)
         
-            # place the text
-            ax.text(cx, y_txt, text, ha="center", va="center", fontsize=8)
+                # remember previous offsets/sizes used to compute next offset
+                prev_offset2, prev_offset = prev_offset, y_offset
+                prev_ct2,     prev_ct     = prev_ct,    ct
         
             x += ct
         
-        # overall total annotation
-        total = sum(counts)
-        ax.set_xlim(0, x*1.05)
-        ax.set_ylim(1, 3)
+        # total annotation
+        ax.text(x + max(counts) * 0.02, 2,
+                f"Total samples: {grand_total}",
+                ha="left", va="center", fontsize=10, fontweight="bold")
+        
+        # tidy & save
+        ax.set_ylim(1.5, 2.5)
         ax.axis("off")
-        plt.title(f"All accounts total: {total}", pad=10)
         plt.tight_layout()
         plt.savefig('qc_counts.png')
         EOF
