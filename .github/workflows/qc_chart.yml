@@ -2,7 +2,9 @@ name: Plot QC Sample Counts & Publish Chart
 
 on:
   workflow_dispatch:
-  
+  schedule:
+    - cron: '0 2 * * *'    # daily at 02:00 UTC
+
 jobs:
   plot-and-publish:
     runs-on: ubuntu-latest
@@ -32,12 +34,14 @@ jobs:
 
         token = os.getenv('PAT_TOKEN')
         headers = {'Authorization': f'token {token}'}
+
         # fetch qc-data release
         resp = requests.get(
           "https://api.github.com/repos/frankyeh/FiberDataHub/releases/tags/qc-data",
           headers=headers)
         resp.raise_for_status()
         assets = resp.json().get('assets', [])
+
         counts, labels = [], []
         for a in assets:
             name = a['name']
@@ -49,7 +53,7 @@ jobs:
                 df = df[df['DWI contrast'] != 1]
                 counts.append(len(df))
                 labels.append(name.replace('_qc.tsv',''))
-        # plot
+
         plt.figure(figsize=(8, max(4,len(labels)*0.4)), dpi=100)
         sns.barplot(x=counts, y=labels, palette='tab10')
         plt.xlabel('Sample Count (filtered)')
@@ -87,12 +91,17 @@ jobs:
 
     - name: Upload chart image
       uses: actions/github-script@v6
+      env:
+        PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        RELEASE_ID: ${{ steps.get_chart_release.outputs.id }}
       with:
         github-token: ${{ secrets.PAT_TOKEN }}
         script: |
           const fs   = require('fs')
-          const relId = parseInt(core.getInput('id'), 10)
-          const data = fs.readFileSync('qc_counts.png')
+          const path = require('path')
+          const relId = parseInt(process.env.RELEASE_ID, 10)
+          const filePath = path.join(process.cwd(), 'qc_counts.png')
+          const data     = fs.readFileSync(filePath)
           await github.rest.repos.uploadReleaseAsset({
             owner: context.repo.owner,
             repo: context.repo.repo,
@@ -100,4 +109,3 @@ jobs:
             name: 'qc_counts.png',
             data
           })
-
