@@ -3,34 +3,51 @@ name: Fetch QC TSV & Publish Release
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 1 * * *'
+    - cron: '0 1 * * *'    # daily at 01:00 UTC
 
 jobs:
   collect-and-publish:
     runs-on: ubuntu-latest
+
     steps:
-    - name: Install jq
-      run: sudo apt-get update && sudo apt-get install -y jq
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq
 
     - name: Download QC TSVs
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
       run: |
         mkdir -p qc_files
         accounts=(labsolver data-hcp data-openneuro data-abcd)
         for acct in "${accounts[@]}"; do
           echo "→ Account: $acct"
-          # choose user vs org as before...
-          # fetch repo list...
+
+          # detect user vs org
+          type=$(curl -s -H "Authorization: token $PAT_TOKEN" \
+            "https://api.github.com/users/$acct" \
+            | jq -r '.type')
+          if [[ "$type" == "Organization" ]]; then
+            repos_url="https://api.github.com/orgs/$acct/repos"
+          else
+            repos_url="https://api.github.com/users/$acct/repos"
+          fi
+
+          # list repos
+          repos=$(curl -sf -H "Authorization: token $PAT_TOKEN" "$repos_url" \
+                  | jq -r '.[].full_name')
           for full in $repos; do
             repo=$(basename "$full")
             echo "  • Repo: $repo"
-            # now limit releases per page to 8
-            releases=$(curl -sf -H "Authorization: Bearer $GITHUB_TOKEN" \
+
+            # fetch up to 8 releases
+            releases=$(curl -sf -H "Authorization: token $PAT_TOKEN" \
               "https://api.github.com/repos/$full/releases?per_page=8") || {
                 echo "     – no releases, skipping"; continue
               }
 
+            # iterate each release object
             echo "$releases" \
               | jq -c 'select(type=="array")[]' \
               | while read -r rel; do
@@ -39,20 +56,21 @@ jobs:
                     | jq -r '.assets[]? | select(.name=="qc.tsv") | .browser_download_url')
                   if [[ -n "$asset_url" && "$asset_url" != "null" ]]; then
                     out="qc_files/${acct}_${repo}_${tag}_qc.tsv"
-                    echo "      - downloading $tag → $out"
-                    curl -sL -H "Authorization: Bearer $GITHUB_TOKEN" \
+                    echo "      - downloading tag '$tag' → $out"
+                    curl -sL -H "Authorization: token $PAT_TOKEN" \
                       "$asset_url" -o "$out"
                   fi
                 done
           done
         done
 
-
     - name: Create or get release
       id: get_release
       uses: actions/github-script@v6
+      env:
+        PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
       with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+        github-token: ${{ secrets.PAT_TOKEN }}
         script: |
           const tag = 'qc-data'
           let rel
@@ -76,9 +94,10 @@ jobs:
     - name: Upload QC TSV assets
       uses: actions/github-script@v6
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         RELEASE_ID: ${{ steps.get_release.outputs.id }}
       with:
+        github-token: ${{ secrets.PAT_TOKEN }}
         script: |
           const fs   = require('fs')
           const path = require('path')
