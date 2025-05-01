@@ -20,30 +20,33 @@ jobs:
         accounts=(labsolver data-hcp data-openneuro data-abcd)
         for acct in "${accounts[@]}"; do
           echo "→ Account: $acct"
-          repos=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
-            "https://api.github.com/users/$acct/repos" \
-            | jq -r '.[].full_name')
+          # choose user vs org as before...
+          # fetch repo list...
           for full in $repos; do
             repo=$(basename "$full")
             echo "  • Repo: $repo"
-            releases_json=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
-              "https://api.github.com/repos/$full/releases")
-            # iterate each release entry
-            echo "$releases_json" \
-            | jq -c '.[]' \
-            | while read -r release; do
-                tag=$(echo "$release" | jq -r '.tag_name')
-                asset_url=$(echo "$release" \
-                  | jq -r '.assets[]? | select(.name=="qc.tsv") | .browser_download_url')
-                if [ -n "$asset_url" ] && [ "$asset_url" != "null" ]; then
-                  out="qc_files/${acct}_${repo}_${tag}_qc.tsv"
-                  echo "      - downloading tag '$tag' → $out"
-                  curl -sL -H "Authorization: Bearer $GITHUB_TOKEN" \
-                    "$asset_url" -o "$out"
-                fi
-              done
+            # now limit releases per page to 8
+            releases=$(curl -sf -H "Authorization: Bearer $GITHUB_TOKEN" \
+              "https://api.github.com/repos/$full/releases?per_page=8") || {
+                echo "     – no releases, skipping"; continue
+              }
+
+            echo "$releases" \
+              | jq -c 'select(type=="array")[]' \
+              | while read -r rel; do
+                  tag=$(echo "$rel" | jq -r '.tag_name')
+                  asset_url=$(echo "$rel" \
+                    | jq -r '.assets[]? | select(.name=="qc.tsv") | .browser_download_url')
+                  if [[ -n "$asset_url" && "$asset_url" != "null" ]]; then
+                    out="qc_files/${acct}_${repo}_${tag}_qc.tsv"
+                    echo "      - downloading $tag → $out"
+                    curl -sL -H "Authorization: Bearer $GITHUB_TOKEN" \
+                      "$asset_url" -o "$out"
+                  fi
+                done
           done
         done
+
 
     - name: Create or get release
       id: get_release
