@@ -54,6 +54,11 @@ jobs:
                 counts.append(len(df))
                 labels.append(name.replace('_qc.tsv',''))
 
+        # build a color for each segment
+        colors = sns.color_palette("tab20", len(counts))
+        # extract accounts for the title
+        accounts = sorted({lbl.split('_')[0] for lbl in labels})
+
         fig, ax = plt.subplots(figsize=(14, 3), dpi=100)
         x, y_bar = 0, 2
         for i, (ct, col, lbl) in enumerate(zip(counts, colors, labels)):
