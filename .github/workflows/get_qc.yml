@@ -1,0 +1,96 @@
+name: Fetch QC TSV & Publish Release
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 1 * * *'
+
+jobs:
+  collect-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install jq
+      run: sudo apt-get update && sudo apt-get install -y jq
+
+    - name: Download QC TSVs
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        mkdir -p qc_files
+        accounts=(labsolver data-hcp data-openneuro data-abcd)
+        for acct in "${accounts[@]}"; do
+          echo "→ Account: $acct"
+          repos=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "https://api.github.com/users/$acct/repos" \
+            | jq -r '.[].full_name')
+          for full in $repos; do
+            repo=$(basename "$full")
+            echo "  • Repo: $repo"
+            releases_json=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+              "https://api.github.com/repos/$full/releases")
+            # iterate each release entry
+            echo "$releases_json" \
+            | jq -c '.[]' \
+            | while read -r release; do
+                tag=$(echo "$release" | jq -r '.tag_name')
+                asset_url=$(echo "$release" \
+                  | jq -r '.assets[]? | select(.name=="qc.tsv") | .browser_download_url')
+                if [ -n "$asset_url" ] && [ "$asset_url" != "null" ]; then
+                  out="qc_files/${acct}_${repo}_${tag}_qc.tsv"
+                  echo "      - downloading tag '$tag' → $out"
+                  curl -sL -H "Authorization: Bearer $GITHUB_TOKEN" \
+                    "$asset_url" -o "$out"
+                fi
+              done
+          done
+        done
+
+    - name: Create or get release
+      id: get_release
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const tag = 'qc-data'
+          let rel
+          try {
+            rel = (await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag
+            })).data
+          } catch {
+            rel = (await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: tag,
+              body: 'Automated QC TSV bundle'
+            })).data
+          }
+          core.setOutput('id', rel.id)
+
+    - name: Upload QC TSV assets
+      uses: actions/github-script@v6
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        RELEASE_ID: ${{ steps.get_release.outputs.id }}
+      with:
+        script: |
+          const fs   = require('fs')
+          const path = require('path')
+          const relId = parseInt(process.env.RELEASE_ID, 10)
+          const dir   = path.join(process.cwd(), 'qc_files')
+          const files = fs.readdirSync(dir).filter(f => f.endsWith('_qc.tsv'))
+
+          for (const file of files) {
+            const data = fs.readFileSync(path.join(dir, file))
+            console.log(`Uploading ${file}…`)
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: relId,
+              name: file,
+              data
+            })
+          }
