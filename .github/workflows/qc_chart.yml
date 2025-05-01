@@ -54,15 +54,51 @@ jobs:
                 counts.append(len(df))
                 labels.append(name.replace('_qc.tsv',''))
 
-        plt.figure(figsize=(8, max(4,len(labels)*0.4)), dpi=100)
-        sns.barplot(x=counts, y=labels, palette='tab10')
-        plt.xlabel('Sample Count (filtered)')
-        plt.ylabel('Dataset')
-        plt.title('QC Sample Counts per Dataset')
+        fig, ax = plt.subplots(figsize=(14, 3), dpi=100)
+        x, y_bar = 0, 2
+        for i, (ct, col, lbl) in enumerate(zip(counts, colors, labels)):
+            # draw the bar segment
+            ax.barh(y_bar, ct, left=x, height=0.6, color=col, edgecolor="white")
+        
+            # center of this segment
+            cx = x + ct/2
+        
+            # choose label y-position and whether it's "above" (top) or "below"
+            if i % 2 == 0:
+                y_txt = 1.5 - (i % 5)*0.1
+                is_top = True
+            else:
+                y_txt = 2.5 + (i % 5)*0.1
+                is_top = False
+        
+            # draw pointer line
+            delta   = y_bar - y_txt
+            y_start = y_txt + delta * 0.25
+            y_end   = y_bar - delta * 0.25
+            ax.plot([cx, cx], [y_start, y_end], color="black", lw=1)
+        
+        
+            # build the two‐line text: repo‐name and sample size
+            repo_name = lbl.split('_')[-1]
+            sample_text = f"(n={ct})"
+            if is_top:
+                text = f"{sample_text}\n{repo_name}"
+            else:
+                text = f"{repo_name}\n{sample_text}"
+        
+            # place the text
+            ax.text(cx, y_txt, text, ha="center", va="center", fontsize=8)
+        
+            x += ct
+        
+        # overall total annotation
+        total = sum(counts)
+        ax.set_xlim(0, x*1.05)
+        ax.set_ylim(1, 3)
+        ax.axis("off")
+        plt.title(f"All accounts total: {total}", pad=10)
         plt.tight_layout()
         plt.savefig('qc_counts.png')
-        EOF
-        python plot_qc_counts.py
 
     - name: Create or get chart release
       id: get_chart_release
