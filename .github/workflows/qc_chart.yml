@@ -59,7 +59,7 @@ jobs:
         # extract accounts for the title
         accounts = sorted({lbl.split('_')[0] for lbl in labels})
 
-        fig, ax = plt.subplots(figsize=(14, 3), dpi=100)
+        fig, ax = plt.subplots(figsize=(20, 3), dpi=100)
         x, y_bar = 0, 2
         for i, (ct, col, lbl) in enumerate(zip(counts, colors, labels)):
             # draw the bar segment
