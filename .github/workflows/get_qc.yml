@@ -13,7 +13,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y jq
 
-    - name: Download QC TSVs
+    - name: Download QC TSVs (with pagination)
       env:
         PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
       run: |
@@ -39,28 +39,34 @@ jobs:
             repo=$(basename "$full")
             echo "  • Repo: $repo"
 
-            # fetch up to 8 releases
-            releases=$(curl -sf -H "Authorization: token $PAT_TOKEN" \
-              "https://api.github.com/repos/$full/releases?per_page=8") || {
-                echo "     – no releases, skipping"; continue
-              }
+            # page through all releases, 100 per page
+            page=1
+            while :; do
+              releases=$(curl -sf -H "Authorization: token $PAT_TOKEN" \
+                "https://api.github.com/repos/$full/releases?per_page=100&page=$page") || break
 
-            # iterate each release object
-            echo "$releases" \
-              | jq -c 'select(type=="array")[]' \
-              | while read -r rel; do
-                  tag=$(echo "$rel" | jq -r '.tag_name')
-                  asset_url=$(echo "$rel" \
-                    | jq -r '.assets[]? | select(.name=="qc.tsv") | .browser_download_url')
-                  if [[ -n "$asset_url" && "$asset_url" != "null" ]]; then
-                    out="qc_files/${acct}_${repo}_${tag}_qc.tsv"
-                    echo "      - downloading tag '$tag' → $out"
-                    curl -sL -H "Authorization: token $PAT_TOKEN" \
-                      "$asset_url" -o "$out"
-                  fi
-                done
+              count=$(echo "$releases" | jq 'length')
+              [[ $count -eq 0 ]] && break
+
+              echo "$releases" \
+                | jq -c 'select(type=="array")[]' \
+                | while read -r rel; do
+                    tag=$(echo "$rel" | jq -r '.tag_name')
+                    asset_url=$(echo "$rel" \
+                      | jq -r '.assets[]? | select(.name=="qc.tsv") | .browser_download_url')
+                    if [[ -n "$asset_url" && "$asset_url" != "null" ]]; then
+                      out="qc_files/${acct}_${repo}_${tag}_qc.tsv"
+                      echo "      - downloading tag '$tag' → $out"
+                      curl -sL -H "Authorization: token $PAT_TOKEN" \
+                        "$asset_url" -o "$out"
+                    fi
+                  done
+
+              page=$((page+1))
+            done
           done
         done
+
 
     - name: Create or get release
       id: get_release
