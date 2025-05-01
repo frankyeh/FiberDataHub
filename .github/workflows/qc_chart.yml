@@ -132,23 +132,42 @@ jobs:
           }
           core.setOutput('id', rel.id)
 
-    - name: Upload chart image
+    - name: Upload QC TSV assets
       uses: actions/github-script@v6
       env:
         PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        RELEASE_ID: ${{ steps.get_chart_release.outputs.id }}
+        RELEASE_ID: ${{ steps.get_release.outputs.id }}
       with:
         github-token: ${{ secrets.PAT_TOKEN }}
         script: |
           const fs   = require('fs')
           const path = require('path')
           const relId = parseInt(process.env.RELEASE_ID, 10)
-          const filePath = path.join(process.cwd(), 'qc_counts.png')
-          const data     = fs.readFileSync(filePath)
-          await github.rest.repos.uploadReleaseAsset({
+
+          // 1) fetch existing assets on this release
+          const { data: existing } = await github.rest.repos.listReleaseAssets({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            release_id: relId,
-            name: 'qc_counts.png',
-            data
+            release_id: relId
           })
+          const existingNames = existing.map(a => a.name)
+
+          // 2) upload only new files
+          const dir   = path.join(process.cwd(), 'qc_files')
+          const files = fs.readdirSync(dir).filter(f => f.endsWith('_qc.tsv'))
+          for (const file of files) {
+            if (existingNames.includes(file)) {
+              console.log(`⏭️ Skipping ${file}, already uploaded.`)
+              continue
+            }
+            const data = fs.readFileSync(path.join(dir, file))
+            console.log(`⬆️ Uploading ${file}…`)
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: relId,
+              name: file,
+              data
+            })
+          }
+
