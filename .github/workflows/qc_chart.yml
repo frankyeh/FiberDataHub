@@ -99,7 +99,9 @@ jobs:
         plt.title(f"All accounts total: {total}", pad=10)
         plt.tight_layout()
         plt.savefig('qc_counts.png')
-
+        EOF
+        python plot_qc_counts.py
+        
     - name: Create or get chart release
       id: get_chart_release
       uses: actions/github-script@v6
