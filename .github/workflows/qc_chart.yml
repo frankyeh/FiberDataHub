@@ -111,27 +111,12 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.PAT_TOKEN }}
       run: |
-        RELEASE=qc-chart
-        REPO=frankyeh/FiberDataHub
-
         for f in *.png; do
-          echo "⏳ Processing $f…"
-
-          # find the existing asset ID (if any)
-          ASSET_ID=$(gh release view "$RELEASE" \
-            --repo "$REPO" \
-            --json assets \
-            -q ".assets[] | select(.name==\"$f\") | .id")
-
-          if [[ -n "$ASSET_ID" ]]; then
-            echo "🗑  Deleting existing asset $f (ID=$ASSET_ID)"
-            gh api \
-              --method DELETE \
-              /repos/frankyeh/FiberDataHub/releases/assets/"$ASSET_ID" \
-              -H "Accept: application/vnd.github+json"
-          fi
+          echo "🗑  Deleting if-exists $f"
+          gh release delete-asset qc-chart "$f" \
+            --repo frankyeh/FiberDataHub -y || true
 
           echo "⬆️  Uploading $f"
-          gh release upload "$RELEASE" "$f" \
-            --repo "$REPO"
-        done  
+          gh release upload qc-chart "$f" \
+            --repo frankyeh/FiberDataHub
+        done
