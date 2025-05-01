@@ -43,7 +43,7 @@ jobs:
             page=1
             while :; do
               releases=$(curl -sf -H "Authorization: token $PAT_TOKEN" \
-                "https://api.github.com/repos/$full/releases?per_page=100&page=$page") || break
+                "https://api.github.com/repos/$full/releases?per_page=8&page=$page") || break
 
               count=$(echo "$releases" | jq 'length')
               [[ $count -eq 0 ]] && break
@@ -72,27 +72,12 @@ jobs:
         GH_TOKEN: ${{ secrets.PAT_TOKEN }}
       run: |
         cd qc_files
-        RELEASE=qc-data
-        REPO=frankyeh/FiberDataHub
-
         for f in *_qc.tsv; do
-          echo "⏳ Processing $f…"
-
-          # find the existing asset ID (if any)
-          ASSET_ID=$(gh release view "$RELEASE" \
-            --repo "$REPO" \
-            --json assets \
-            -q ".assets[] | select(.name==\"$f\") | .id")
-
-          if [[ -n "$ASSET_ID" ]]; then
-            echo "🗑  Deleting existing asset $f (ID=$ASSET_ID)"
-            gh api \
-              --method DELETE \
-              /repos/frankyeh/FiberDataHub/releases/assets/"$ASSET_ID" \
-              -H "Accept: application/vnd.github+json"
-          fi
+          echo "🗑  Deleting if-exists $f"
+          gh release delete-asset qc-data "$f" \
+            --repo frankyeh/FiberDataHub -y || true
 
           echo "⬆️  Uploading $f"
-          gh release upload "$RELEASE" "$f" \
-            --repo "$REPO"
+          gh release upload qc-data "$f" \
+            --repo frankyeh/FiberDataHub
         done
