@@ -204,7 +204,7 @@ accounts_to_plot = {
     "data-hcp": 4,
     "data-abcd": 5,
     "data-openneuro": 10,
-    "labsolver": 7
+    "data-others": 7
 }
 
 plot_multi_account_releases(accounts_to_plot)
