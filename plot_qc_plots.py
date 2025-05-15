@@ -204,6 +204,7 @@ accounts_to_plot = {
     "data-hcp": 4,
     "data-abcd": 5,
     "data-openneuro": 10,
+    "data-indi": 10,
     "data-others": 7
 }
 
