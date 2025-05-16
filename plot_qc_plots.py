@@ -1,4 +1,5 @@
 import requests, pandas as pd, matplotlib.pyplot as plt, seaborn as sns, numpy as np, matplotlib.colors as mcolors, math
+import io # Added for StringIO
 
 def get_all_repos_for_account(account):
     return ["frankyeh/FiberDataHub"]
@@ -16,22 +17,37 @@ def get_qc_asset_links(repo):
         print(f"Error fetching release data from {url}: {e}"); return {}
 
 def process_qc_data(qc_url):
-    """Download, filter qc.tsv, return DataFrame (None if error)."""
+    """Download, check line count, filter qc.tsv, return DataFrame (None if error or too few lines)."""
     try:
-        with requests.get(qc_url, stream=True, allow_redirects=True) as r:
-            r.raise_for_status(); df = pd.read_csv(r.raw, sep="\t")
-    except requests.exceptions.RequestException as e: print(f"Failed to download {qc_url}: {e}"); return None
-    except Exception as e: print(f"Failed to read/process data from {qc_url}: {e}"); return None
+        r = requests.get(qc_url, allow_redirects=True)
+        r.raise_for_status()
+        content = r.content.decode('utf-8') # Decode content to string
+    except requests.exceptions.RequestException as e:
+        print(f"Failed to download {qc_url}: {e}"); return None
+    except Exception as e: # Catch other potential errors like decoding errors
+        print(f"Error during download/decoding for {qc_url}: {e}"); return None
+
+    # Check line count
+    lines = content.splitlines()
+    if len(lines) < 16:
+        print(f"Skipping {qc_url}: File has {len(lines)} lines (less than 16).")
+        return None
+
+    try:
+        # Use io.StringIO to read the string content with pandas
+        df = pd.read_csv(io.StringIO(content), sep="\t")
+    except Exception as e:
+        print(f"Failed to read/process data from {qc_url} with pandas: {e}"); return None
 
     if 'neighboring DWI correlation(masked)' in df.columns: df = df[df['neighboring DWI correlation(masked)'] <= 1]
     if 'DWI contrast' in df.columns: df = df[df['DWI contrast'] != 1]
 
     req_cols = ['neighboring DWI correlation(masked)', 'DWI contrast', 'dwi count(b0/dwi)']
     present_cols = [col for col in req_cols if col in df.columns]
-    if not present_cols: print(f"Warning: No required columns found in {qc_url}. Skipping."); return None
+    if not present_cols:
+        print(f"Warning: No required columns found in {qc_url}. Skipping."); return None
 
     df = df[present_cols]
-    # Corrected syntax for the loop and conditional assignment
     for col in req_cols:
         if col not in df.columns:
             df[col] = np.nan
@@ -44,7 +60,7 @@ def load_data_by_tag(repo, account=None):
         if account and not (tag.startswith(account + '_') or tag == account): continue
         df = process_qc_data(url)
         if df is not None and not df.empty and not df.isnull().all().all(): data_by_tag[tag] = df
-        else: print(f"Skipping asset '{tag}' due to issues or empty data.")
+        else: print(f"Skipping asset '{tag}' due to issues, empty data, or insufficient lines.")
     return data_by_tag
 
 def load_all_releases(account):
