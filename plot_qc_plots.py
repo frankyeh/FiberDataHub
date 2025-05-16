@@ -478,7 +478,7 @@ def plot_multi_account_releases(account_configs):
 # Define the accounts to plot and the desired chunk size (number of tags per plot panel) for each account.
 # The chunk size applies to the number of tag_suffixes plotted together within an (account, repo) group chunk.
 accounts_to_plot = {
-    "data-hcp": 4, # Plot max 4 tags per panel for data-hcp groups (e.g., data-hcp/lifespan)
+    "data-hcp": 5, # Plot max 4 tags per panel for data-hcp groups (e.g., data-hcp/lifespan)
     "data-abcd": 11, # Plot max 5 tags per panel for data-abcd groups (e.g., data-abcd/release3)
     "data-openneuro": 10, # Plot max 10 tags per panel for data-openneuro groups (e.g., data-openneuro/ds001)
     "data-indi": 10,
