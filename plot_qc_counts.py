@@ -78,7 +78,7 @@ if grouped_data:
             labels_fg.append(item['label'])
 
     # --- Plotting ---
-    fig, ax = plt.subplots(figsize=(22, 3), dpi=100)
+    fig, ax = plt.subplots(figsize=(24, 3), dpi=100)
     ax.set(ylim=(1.5, 2.5)); ax.axis("off")
 
     # 1. Draw BACKGROUND bars and create the color map
