@@ -141,4 +141,4 @@ if grouped_data:
         
     plt.tight_layout()
     plt.savefig(OUTPUT_FILENAME)
-    print(f"Chart saved to {OUTPUT_FILENAME}")
+    print(f"Chart saved to {OUTPUT_FILENAME}", bbox_inches='tight', pad_inches=0.1)
