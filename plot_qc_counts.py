@@ -140,5 +140,5 @@ if grouped_data:
         sub_item_counter += 1
         
     plt.tight_layout()
-    plt.savefig(OUTPUT_FILENAME)
-    print(f"Chart saved to {OUTPUT_FILENAME}", bbox_inches='tight', pad_inches=0.1)
+    plt.savefig(OUTPUT_FILENAME, bbox_inches='tight', pad_inches=0.1)
+    print(f"Chart saved to {OUTPUT_FILENAME}")
