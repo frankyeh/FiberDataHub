@@ -470,7 +470,7 @@ def plot_multi_account_releases(account_configs):
 
     # Adjust layout to prevent titles/labels overlapping and save the figure
     plt.tight_layout(rect=[0.02, 0.02, 0.95, 0.97], h_pad=3, w_pad=3)
-    plt.savefig('qc_plots.png')
+    plt.savefig('qc_plots.png', bbox_inches='tight', pad_inches=0.1)
     print("\n--- QC plots saved to 'qc_plots.png' ---")
 
 
@@ -479,7 +479,7 @@ def plot_multi_account_releases(account_configs):
 # The chunk size applies to the number of tag_suffixes plotted together within an (account, repo) group chunk.
 accounts_to_plot = {
     "data-hcp": 5, # Plot max 4 tags per panel for data-hcp groups (e.g., data-hcp/lifespan)
-    "data-abcd": 11, # Plot max 5 tags per panel for data-abcd groups (e.g., data-abcd/release3)
+    "data-nih": 10, # Plot max 4 tags per panel for data-hcp groups (e.g., data-hcp/lifespan)
     "data-openneuro": 10, # Plot max 10 tags per panel for data-openneuro groups (e.g., data-openneuro/ds001)
     "data-indi": 10,
     "data-others": 7
