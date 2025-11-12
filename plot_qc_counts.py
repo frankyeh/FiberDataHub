@@ -68,7 +68,7 @@ if grouped_data:
     # Data for BACKGROUND bars (merged groups)
     labels_bg = [key for key, group in sorted_groups]
     counts_bg = [sum(item['count'] for item in group) for key, group in sorted_groups]
-    colors_bg = sns.color_palette("tab20", len(counts_bg))
+    colors_bg = sns.color_palette("tab20c", len(counts_bg))
 
     # Data for FOREGROUND bars (original files, aligned with background)
     counts_fg, labels_fg = [], []
