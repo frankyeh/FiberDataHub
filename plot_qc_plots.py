@@ -174,7 +174,7 @@ def _plot_single_chunk(ax_scatter, ax_kde, tag_suffixes, data_dict_for_group, cu
         ax_kde.set_visible(False)
         return
 
-    palette = sns.color_palette("tab20", max(n_colors, 20))[:n_colors]
+    palette = sns.color_palette("tab20c", max(n_colors, 20))[:n_colors]
     cluster_labels = {} # {(rx, ry): [ {x, y, tag, color}, ... ] }
 
     ndwic_col = 'neighboring DWI correlation(masked)'
