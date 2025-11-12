@@ -2,8 +2,6 @@ name: Plot QC Sample Counts & Publish Chart
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 2 * * *'    # daily at 02:00 UTC
 
 jobs:
   plot-and-publish:
