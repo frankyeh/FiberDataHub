@@ -23,7 +23,40 @@ jobs:
       env:
         PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
       run: |
-        python plot_qc_counts.py
+        python plot_qc_counts.py      
+        
+    - name: Remove & Re-upload QC TSVs via GH CLI
+      env:
+        GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+      run: |
+        for f in *.png; do
+          echo "🗑  Deleting if-exists $f"
+          gh release delete-asset qc-chart "$f" \
+            --repo frankyeh/FiberDataHub -y || true
+
+          echo "⬆️  Uploading $f"
+          gh release upload qc-chart "$f" \
+            --repo frankyeh/FiberDataHub
+        done
+  plot-and-publish2:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Install Python deps
+      run: pip install pandas matplotlib seaborn requests
+
+    - name: Generate QC counts chart
+      env:
+        PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      run: |
         python plot_qc_plots.py        
         
     - name: Remove & Re-upload QC TSVs via GH CLI
