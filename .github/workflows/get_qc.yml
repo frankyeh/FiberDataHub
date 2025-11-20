@@ -43,7 +43,7 @@ jobs:
             page=1
             while :; do
               releases=$(curl -sf -H "Authorization: token $PAT_TOKEN" \
-                "https://api.github.com/repos/$full/releases?per_page=8&page=$page") || break
+                "https://api.github.com/repos/$full/releases?per_page=50&page=$page") || break
 
               count=$(echo "$releases" | jq 'length')
               [[ $count -eq 0 ]] && break
