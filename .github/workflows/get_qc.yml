@@ -71,13 +71,9 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.PAT_TOKEN }}
       run: |
+        gh release delete qc-data -y --repo frankyeh/FiberDataHub
         cd qc_files
         for f in *_qc.tsv; do
-          echo "🗑  Deleting if-exists $f"
-          gh release delete-asset qc-data "$f" \
-            --repo frankyeh/FiberDataHub -y || true
-
           echo "⬆️  Uploading $f"
-          gh release upload qc-data "$f" \
-            --repo frankyeh/FiberDataHub
+          gh release upload qc-data "$f" --repo frankyeh/FiberDataHub
         done
