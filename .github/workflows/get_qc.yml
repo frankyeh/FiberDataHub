@@ -71,5 +71,5 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.PAT_TOKEN }}
       run: |
-        gh release delete qc-data -y --repo frankyeh/FiberDataHub
+        gh release delete qc-data -y || true
         gh release create qc-data ./qc_files/*.tsv
