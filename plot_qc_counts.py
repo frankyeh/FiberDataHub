@@ -77,74 +77,37 @@ if grouped_data:
             counts_fg.append(item['count'])
             labels_fg.append(item['label'])
 
-# --- Plotting ---
-if grouped_data:
-    # Sort and Prep Data (Same as before)
-    sorted_groups = sorted(grouped_data.items())
-    labels_bg = [key for key, group in sorted_groups]
-    counts_bg = [sum(item['count'] for item in group) for key, group in sorted_groups]
-    colors_bg = sns.color_palette("tab20c", len(counts_bg))
-    
-    counts_fg, labels_fg = [], []
-    for key, group in sorted_groups:
-        for item in sorted(group, key=lambda x: x['label']):
-            counts_fg.append(item['count'])
-            labels_fg.append(item['label'])
+    # --- Plotting ---
+    fig, ax = plt.subplots(figsize=(24, 3), dpi=100)
+    ax.set(ylim=(1.5, 2.5)); ax.axis("off")
 
-    grand_total_bg = sum(counts_bg)
-
-    # Increase figure height and ylim to accommodate staggered labels
-    fig, ax = plt.subplots(figsize=(24, 5), dpi=100) 
-    ax.set(ylim=(0, 4)); ax.axis("off") # Y-limits expanded
-
-    # 1. Draw BACKGROUND bars (Groups) with STAGGERING
-    x_pos_bg = 0
+    # 1. Draw BACKGROUND bars and create the color map
+    x_pos_bg, grand_total_bg = 0, sum(counts_bg)
     color_map = []
-    
-    # Staggering Logic
-    # We cycle through 3 distinct height levels to avoid overlap
-    for i, (ct, col, lbl) in enumerate(zip(counts_bg, colors_bg, labels_bg)):
+    label_toggle = False
+
+    for ct, col, lbl in zip(counts_bg, colors_bg, labels_bg):
+        # ax.barh(2, ct, left=x_pos_bg, height=0.6, color=col, edgecolor="white")
+        # Record the color for the x-range covered by this bar
         color_map.append({'end': x_pos_bg + ct, 'color': col})
         
-        # Only label if the group isn't microscopic (> 0.1% of total)
-        if (ct / grand_total_bg) > 0.001:
+        if ct > 100:
             center_x = x_pos_bg + ct / 2
-            
-            # Logic: Alternate Top/Bottom, then cycle through 3 height levels (0, 1, 2)
-            is_top = (i % 2 == 0)
-            level = (i // 2) % 3  # Groups items into levels: [0,0], [1,1], [2,2]...
-            
-            # Calculate Y positions
-            base_y = 2
-            height_step = 0.6
-            dist_from_bar = 0.5 + (level * height_step)
-            
-            y_txt = base_y + dist_from_bar if is_top else base_y - dist_from_bar
-            y_conn = base_y + (0.2 if is_top else -0.2) # Small connector nub near bar
-
-            # Draw Bracket
-            # Vertical lines
-            ax.plot([x_pos_bg, x_pos_bg], [y_conn, y_txt], "k", lw=0.5, alpha=0.4)
-            ax.plot([x_pos_bg + ct, x_pos_bg + ct], [y_conn, y_txt], "k", lw=0.5, alpha=0.4)
-            # Horizontal cap at text level
-            ax.plot([x_pos_bg, x_pos_bg + ct], [y_txt, y_txt], "k", lw=0.5, alpha=0.4)
-
-            # Format Text
+            y_offset = 0.45
+            y_txt, is_top = (2 + y_offset, False) if label_toggle else (2 - y_offset, True)
+            label_toggle = not label_toggle
+            y_pos, y_pos2 = y_txt + (2 - y_txt) * 0.3, y_txt + (2 - y_txt) * 0.4
+            ax.plot([x_pos_bg, x_pos_bg], [y_pos, y_pos2], "k", lw=1)
+            ax.plot([x_pos_bg + ct, x_pos_bg + ct], [y_pos, y_pos2], "k", lw=1)
+            ax.plot([x_pos_bg, x_pos_bg + ct], [y_pos, y_pos], "k", lw=1)
             sample_name = lbl.replace('data-hcp_', '').replace('data-', '').replace('_','\n')
-            txt_str = f"{sample_name}\n(n={ct})" if is_top else f"(n={ct})\n{sample_name}"
-            
-            # Determine Text Anchor position (slightly above/below the bracket line)
-            y_text_final = y_txt + 0.15 if is_top else y_txt - 0.15
-            
-            ax.text(center_x, y_text_final, txt_str, ha="center", va="center", 
-                    fontsize=11, linespacing=0.9)
-
+            text = f"{sample_name}\n(n={ct})" if is_top else f"(n={ct})\n{sample_name}"
+            ax.text(center_x, y_txt, text, ha="center", va="center", fontsize=12)
         x_pos_bg += ct
+    
+    ax.text(x_pos_bg + max(counts_bg, default=0) * 0.02, 2, f"Total samples: {grand_total_bg}", ha="left", va="center", fontsize=10, fontweight="bold")
 
-    # Total count label on the far right
-    ax.text(x_pos_bg * 1.01, 2, f"Total: {grand_total_bg}", va="center", fontsize=12, fontweight="bold")
-
-    # 2. Draw FOREGROUND bars (Sub-items)
+    # 2. Draw FOREGROUND bars using the color map
     x_pos_fg = 0
     last_base_color = None
     sub_item_counter = 0
@@ -153,22 +116,25 @@ if grouped_data:
         center_x_fg = x_pos_fg + ct / 2
         base_color = get_base_color(center_x_fg, color_map)
 
+        # If we've entered a new background color group, reset the counter
         if base_color != last_base_color:
             sub_item_counter = 0
             last_base_color = base_color
 
-        amount = 1.0 + ((sub_item_counter % 6) * 0.03)
+        # Calculate a varying amount for lightness.
+        # This cycles the adjustment through 1.2, 1.3, and 1.4 for bars in the same group.
+        variation = (sub_item_counter % 6) * 0.03
+        amount = 1.0 + variation
+        
         new_color = adjust_lightness(base_color, amount=amount)
         
-        ax.barh(2, ct, left=x_pos_fg, height=0.4, color=new_color, 
-                edgecolor=adjust_lightness(base_color, amount=0.9), linewidth=0.5)
+        ax.barh(2, ct, left=x_pos_fg, height=0.4, color=new_color, edgecolor=adjust_lightness(base_color, amount=0.9))
         
-        # Only label sub-items if wide enough (>0.2%)
-        if (ct / grand_total_bg) > 0.002:
-            parts = lbl.split('_')
-            s_name = parts[-1] if len(parts) > 1 else lbl.split('-')[-1]
-            ax.text(center_x_fg, 2.0, s_name, ha="center", va="center", 
-                    fontsize=7, rotation=90, color='white' if sum(base_color[:3])<1.5 else 'black')
+        # Labeling for foreground bars
+        if ct > 100:
+            sample_parts = lbl.split('_')
+            sample_name = sample_parts[-1] if len(sample_parts) > 1 else lbl.split('-')[-1]
+            ax.text(center_x_fg, 2.0, sample_name, ha="center", va="center", fontsize=8, rotation=90)
             
         x_pos_fg += ct
         sub_item_counter += 1
