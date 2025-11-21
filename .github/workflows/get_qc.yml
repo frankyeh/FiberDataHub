@@ -13,7 +13,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y jq
 
-    - name: Download QC TSVs (with pagination)
+    - name: Download QC TSVs (GraphQL)
       env:
         PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
       shell: bash
@@ -21,50 +21,40 @@ jobs:
         set -euo pipefail
         mkdir -p qc_files
         accounts=(data-hcp data-nih data-openneuro data-indi data-others)
-
-        auth_header=()
-        [[ -n "${PAT_TOKEN-}" ]] && auth_header=(-H "Authorization: token $PAT_TOKEN")
-
+    
+        # GraphQL requires a token
+        auth=(-H "Authorization: Bearer $PAT_TOKEN")
+    
         for acct in "${accounts[@]}"; do
           echo "→ Account: $acct"
-
-          type=$(curl -s "${auth_header[@]}" \
-            "https://api.github.com/users/$acct" \
-            | jq -r '.type')
-
-          if [[ "$type" == "Organization" ]]; then
-            repos_url="https://api.github.com/orgs/$acct/repos?per_page=100"
-          else
-            repos_url="https://api.github.com/users/$acct/repos?per_page=100"
-          fi
-
-          repos=$(curl -sf "${auth_header[@]}" "$repos_url" \
-                  | jq -r '.[].full_name') || continue
-
-          for full in $repos; do
-            repo=$(basename "$full")
+          
+          # 1. Fetch Repos (Unified endpoint works for Users & Orgs)
+          repos=$(curl -sf "${auth[@]}" "https://api.github.com/users/$acct/repos?per_page=100" \
+            | jq -r '.[].name') || continue
+    
+          for repo in $repos; do
             echo "  • Repo: $repo"
-
-            page=1
+            cursor=null
+    
+            # 2. Fetch Releases via GraphQL (No 504s, fast pagination)
             while :; do
-              releases=$(curl -sf "${auth_header[@]}" \
-                "https://api.github.com/repos/$full/releases?per_page=10&page=$page") || break
-
-              count=$(jq 'length' <<<"$releases")
-              [[ $count -eq 0 ]] && break
-
-              echo "$releases" | jq -c '.[]' | while read -r rel; do
-                tag=$(jq -r '.tag_name' <<<"$rel")
-                asset_url=$(jq -r '.assets[]? | select(.name=="qc.tsv") | .browser_download_url' <<<"$rel")
-
-                if [[ -n "$asset_url" && "$asset_url" != "null" ]]; then
-                  out="qc_files/${acct}_${repo}_${tag}_qc.tsv"
-                  echo "      - downloading tag '$tag' → $out"
-                  curl -sL "${auth_header[@]}" "$asset_url" -o "$out"
-                fi
+              query='query($o:String!,$r:String!,$c:String){repository(owner:$o,name:$r){releases(first:100,after:$c){pageInfo{endCursor}nodes{tagName,releaseAssets(first:5,name:"qc.tsv"){nodes{downloadUrl}}}}}}'
+              json=$(jq -nc --arg o "$acct" --arg r "$repo" --arg c "$cursor" --arg q "$query" '{query:$q,variables:{o:$o,r:$r,c:$c}}')
+    
+              resp=$(curl -sf -X POST "${auth[@]}" -d "$json" https://api.github.com/graphql) || break
+    
+              # Parse & Download in one pass
+              jq -r '.data.repository.releases.nodes[] | {t:.tagName, u:(.releaseAssets.nodes[0].downloadUrl)} | select(.u) | [.t,.u] | @tsv' <<<"$resp" |
+              while read -r tag url; do
+                out="qc_files/${acct}_${repo}_${tag}_qc.tsv"
+                echo "      - downloading $tag"
+                curl -sL "${auth[@]}" "$url" -o "$out" &  # Run in bg for speed? Remove '&' if bandwidth limited
               done
-
-              page=$((page+1))
+              wait # Wait for background downloads if '&' is used
+    
+              # Pagination check
+              cursor=$(jq -r '.data.repository.releases.pageInfo.endCursor // empty' <<<"$resp")
+              [[ -z "$cursor" ]] && break
             done
           done
         done
