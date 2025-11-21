@@ -31,7 +31,6 @@ def resolve_overlaps(nodes, min_dist):
     Adjusts x-coordinates to ensure nodes are at least min_dist apart.
     """
     nodes.sort(key=lambda k: k['x'])
-    # INCREASED ITERATIONS: Run 50 times to ensure they push far enough apart
     for _ in range(50): 
         stable = True
         for i in range(len(nodes) - 1):
@@ -77,7 +76,7 @@ for asset in assets:
     except Exception as e:
         print(f"Error processing {name}: {e}")
 
-# --- Plotting ---
+# --- Prepare Aligned Data for Plotting ---
 if grouped_data:
     sorted_groups = sorted(grouped_data.items())
     labels_bg = [key for key, group in sorted_groups]
@@ -90,8 +89,9 @@ if grouped_data:
             counts_fg.append(item['count'])
             labels_fg.append(item['label'])
 
-    fig, ax = plt.subplots(figsize=(24, 3), dpi=100)
-    ax.set(ylim=(1.5, 2.5)); ax.axis("off")
+    fig, ax = plt.subplots(figsize=(24, 3.5), dpi=100)
+    # Adjusted Y-limit slightly to ensure bottom text is visible
+    ax.set(ylim=(1.4, 2.5)); ax.axis("off") 
 
     # 1. Draw BACKGROUND bars and create the color map
     x_pos_bg, grand_total_bg = 0, sum(counts_bg)
@@ -110,12 +110,12 @@ if grouped_data:
             label_toggle = not label_toggle
             y_pos, y_pos2 = y_txt + (2 - y_txt) * 0.3, y_txt + (2 - y_txt) * 0.4
             
-            # --- ORIGINAL DRAWING ---
+            # --- ORIGINAL LINE DRAWING (UNCHANGED) ---
             ax.plot([x_pos_bg, x_pos_bg], [y_pos, y_pos2], "k", lw=1)
             ax.plot([x_pos_bg + ct, x_pos_bg + ct], [y_pos, y_pos2], "k", lw=1)
             ax.plot([x_pos_bg, x_pos_bg + ct], [y_pos, y_pos], "k", lw=1)
             
-            sample_name = lbl.replace('data-', '').replace('_','\n')
+            sample_name = lbl.replace('data-hcp_', '').replace('data-', '').replace('_','\n')
             text = f"{sample_name}\n(n={ct})" if is_top else f"(n={ct})\n{sample_name}"
             
             text_candidates.append({
@@ -131,8 +131,8 @@ if grouped_data:
     upper_row = [n for n in text_candidates if n['y'] > 2]
     lower_row = [n for n in text_candidates if n['y'] < 2]
     
-    # INCREASED DISTANCE: 9% of total width (was 5%)
-    min_dist = grand_total_bg * 0.09 
+    # Set minimum distance to 5.5% of total width
+    min_dist = grand_total_bg * 0.055 
     
     upper_row = resolve_overlaps(upper_row, min_dist)
     lower_row = resolve_overlaps(lower_row, min_dist)
@@ -146,8 +146,9 @@ if grouped_data:
                      [2 + (0.3 if node['y']>2 else -0.3), node['y']], 
                      color='black', lw=0.5, alpha=0.3, linestyle=':')
 
-    # Moved Total Label slightly further right to avoid collision with widely spread text
-    ax.text(x_pos_bg + max(counts_bg, default=0) * 0.05, 2, f"Total samples: {grand_total_bg}", ha="left", va="center", fontsize=10, fontweight="bold")
+    # Moved Total Samples text to the bottom center (X=midpoint, Y=1.45)
+    ax.text(grand_total_bg / 2, 1.35, f"Total samples: {grand_total_bg}", 
+            ha="center", va="top", fontsize=12, fontweight="bold")
 
     # 2. Draw FOREGROUND bars
     x_pos_fg = 0
