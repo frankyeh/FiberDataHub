@@ -16,51 +16,53 @@ jobs:
     - name: Download QC TSVs (with pagination)
       env:
         PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      shell: bash
       run: |
+        set -euo pipefail
         mkdir -p qc_files
         accounts=(data-hcp data-nih data-openneuro data-indi data-others)
+
+        auth_header=()
+        [[ -n "${PAT_TOKEN-}" ]] && auth_header=(-H "Authorization: token $PAT_TOKEN")
+
         for acct in "${accounts[@]}"; do
           echo "→ Account: $acct"
 
-          # detect user vs org
-          type=$(curl -s -H "Authorization: token $PAT_TOKEN" \
+          type=$(curl -s "${auth_header[@]}" \
             "https://api.github.com/users/$acct" \
             | jq -r '.type')
+
           if [[ "$type" == "Organization" ]]; then
-            repos_url="https://api.github.com/orgs/$acct/repos"
+            repos_url="https://api.github.com/orgs/$acct/repos?per_page=100"
           else
-            repos_url="https://api.github.com/users/$acct/repos"
+            repos_url="https://api.github.com/users/$acct/repos?per_page=100"
           fi
 
-          # list repos
-          repos=$(curl -sf -H "Authorization: token $PAT_TOKEN" "$repos_url" \
-                  | jq -r '.[].full_name')
+          repos=$(curl -sf "${auth_header[@]}" "$repos_url" \
+                  | jq -r '.[].full_name') || continue
+
           for full in $repos; do
             repo=$(basename "$full")
             echo "  • Repo: $repo"
 
-            # page through all releases, 100 per page
             page=1
             while :; do
-              releases=$(curl -sf -H "Authorization: token $PAT_TOKEN" \
+              releases=$(curl -sf "${auth_header[@]}" \
                 "https://api.github.com/repos/$full/releases?per_page=50&page=$page") || break
 
-              count=$(echo "$releases" | jq 'length')
+              count=$(jq 'length' <<<"$releases")
               [[ $count -eq 0 ]] && break
 
-              echo "$releases" \
-                | jq -c 'select(type=="array")[]' \
-                | while read -r rel; do
-                    tag=$(echo "$rel" | jq -r '.tag_name')
-                    asset_url=$(echo "$rel" \
-                      | jq -r '.assets[]? | select(.name=="qc.tsv") | .browser_download_url')
-                    if [[ -n "$asset_url" && "$asset_url" != "null" ]]; then
-                      out="qc_files/${acct}_${repo}_${tag}_qc.tsv"
-                      echo "      - downloading tag '$tag' → $out"
-                      curl -sL -H "Authorization: token $PAT_TOKEN" \
-                        "$asset_url" -o "$out"
-                    fi
-                  done
+              echo "$releases" | jq -c '.[]' | while read -r rel; do
+                tag=$(jq -r '.tag_name' <<<"$rel")
+                asset_url=$(jq -r '.assets[]? | select(.name=="qc.tsv") | .browser_download_url' <<<"$rel")
+
+                if [[ -n "$asset_url" && "$asset_url" != "null" ]]; then
+                  out="qc_files/${acct}_${repo}_${tag}_qc.tsv"
+                  echo "      - downloading tag '$tag' → $out"
+                  curl -sL "${auth_header[@]}" "$asset_url" -o "$out"
+                fi
+              done
 
               page=$((page+1))
             done
