@@ -48,7 +48,7 @@ jobs:
             page=1
             while :; do
               releases=$(curl -sf "${auth_header[@]}" \
-                "https://api.github.com/repos/$full/releases?per_page=16&page=$page") || break
+                "https://api.github.com/repos/$full/releases?per_page=10&page=$page") || break
 
               count=$(jq 'length' <<<"$releases")
               [[ $count -eq 0 ]] && break
