@@ -47,8 +47,9 @@ jobs:
               jq -r '.data.repository.releases.nodes[] | {t:.tagName, u:(.releaseAssets.nodes[0].downloadUrl)} | select(.u) | [.t,.u] | @tsv' <<<"$resp" |
               while read -r tag url; do
                 out="qc_files/${acct}_${repo}_${tag}_qc.tsv"
-                echo "      - downloading $tag"
-                curl -sL "${auth[@]}" "$url" -o "$out" &  # Run in bg for speed? Remove '&' if bandwidth limited
+                curl -sL "${auth[@]}" "$url" -o "$out"
+                n=$(( $(wc -l < "$out") - 1 ))
+                echo "      - downloading $tag (n=$n)"
               done
               wait # Wait for background downloads if '&' is used
     
