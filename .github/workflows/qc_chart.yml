@@ -25,17 +25,14 @@ jobs:
       run: |
         python plot_qc_counts.py      
         
-    - name: Remove & Re-upload QC TSVs via GH CLI
+    - name: Replace QC charts in the qc-chart release
       env:
         GH_TOKEN: ${{ secrets.PAT_TOKEN }}
       run: |
-        for f in *.png; do
-          echo "🗑  Deleting if-exists $f"
-          gh release delete-asset qc-chart "$f" \
-            --repo frankyeh/FiberDataHub -y || true
-
-          echo "⬆️  Uploading $f"
-          gh release upload qc-chart "$f" \
+        # --clobber swaps each asset in place, so embedded chart URLs never return 404 mid-run
+        for f in *.png *.svg; do
+          echo "Uploading $f"
+          gh release upload qc-chart "$f" --clobber \
             --repo frankyeh/FiberDataHub
         done
   plot-and-publish2:

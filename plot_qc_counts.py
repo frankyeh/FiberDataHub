@@ -196,6 +196,93 @@ def group_type(key):
     return 2
 
 
+# --- Dataset-type chart (website hero) ---
+# one row per dataset type on a common scale; each segment is one repository group,
+# so bar lengths compare the types truthfully and segments show where the samples live
+TYPE_NAMES = ('Healthy human', 'Patient / disease', 'Animal / phantom / other')
+TYPE_COLORS = ('#2a78d6', '#eb6834', '#1baf7a')  # categorical, validated for color-vision deficiency
+INK, MUTED = '#16181d', '#5b616e'
+
+
+def type_rows(grouped_data):
+    """[(type name, color, total, [(repository label, count) largest first])] for the three dataset types"""
+    rows = []
+    for i, (name, color) in enumerate(zip(TYPE_NAMES, TYPE_COLORS)):
+        repos = [(key.replace('data-', '').replace('_', '/'), sum(item['count'] for item in group))
+                 for key, group in grouped_data.items() if group_type(key) == i]
+        repos.sort(key=lambda r: -r[1])
+        rows.append((name, color, sum(c for _, c in repos), repos))
+    return rows
+
+
+def draw_type_bar(ax, y, color, repos, scale, height, label_min):
+    """one bar of repository segments separated by surface gaps; returns the repositories too narrow to label"""
+    x, unlabeled = 0, []
+    for label, count in repos:
+        ax.barh(y, count, left=x, height=height, color=color, edgecolor='white', linewidth=1.5)
+        if count >= label_min * scale:
+            ax.text(x + scale * 0.004, y + height / 2 + 0.06, f"{label}\n{count:,}", ha='left', va='bottom',
+                    fontsize=11, color=INK, linespacing=1.25)
+        else:
+            unlabeled.append((label, count))
+        x += count
+    return x, unlabeled
+
+
+def save_type_hero(rows, total, stamp):
+    """wide composition for desktop pages"""
+    fig = plt.figure(figsize=(12, 4.8), dpi=200)
+    fig.patch.set_facecolor('white')
+    fig.text(0.02, 0.95, 'QC-passed diffusion MRI samples by dataset type', fontsize=13, fontweight='bold', color=INK, va='top')
+    fig.text(0.98, 0.95, f'Live count from the qc-data release · {stamp}', fontsize=10, color=MUTED, ha='right', va='top')
+    ax = fig.add_axes([0.25, 0.13, 0.73, 0.72])
+    ax.axis('off')
+    scale = max(r[2] for r in rows)
+    ax.set(xlim=(0, scale), ylim=(-0.5, len(rows) - 0.25))
+    for i, (name, color, row_total, repos) in enumerate(rows):
+        y = len(rows) - 1 - i
+        fy = 0.13 + 0.72 * (y + 0.5) / (len(rows) + 0.25)  # row center in figure coordinates
+        fig.text(0.02, fy + 0.005, f"{row_total:,}", fontsize=24, fontweight='bold', color=INK, va='bottom')
+        fig.patches.append(plt.Rectangle((0.02, fy - 0.052), 0.011, 0.0275, color=color, transform=fig.transFigure))
+        fig.text(0.036, fy - 0.005, name, fontsize=12, color=MUTED, va='top')
+        end, rest = draw_type_bar(ax, y - 0.1, color, repos, scale, 0.34, 0.07)
+        if rest:
+            ax.text(end + scale * 0.008, y - 0.1, '  ·  '.join(f"{label} {count:,}" for label, count in rest),
+                    ha='left', va='center', fontsize=10, color=MUTED)
+    fig.text(0.02, 0.03, f"Total samples: {total:,} QC-passed scans in {sum(len(r[3]) for r in rows)} repository groups. "
+             "Counts change as datasets are added and quality-controlled.", fontsize=10, color=MUTED)
+    fig.savefig('qc_counts_by_type.png', facecolor='white')
+    fig.savefig('qc_counts_by_type.svg', facecolor='white')
+    plt.close(fig)
+
+
+def save_type_mobile(rows, total, stamp):
+    """narrow composition for phones: the same rows stacked, largest repositories listed under each bar"""
+    fig = plt.figure(figsize=(4.2, 7.4), dpi=200)
+    fig.patch.set_facecolor('white')
+    fig.text(0.06, 0.975, 'QC-passed samples\nby dataset type', fontsize=13, fontweight='bold', color=INK, va='top', linespacing=1.2)
+    scale = max(r[2] for r in rows)
+    top, step = 0.875, 0.27
+    for i, (name, color, row_total, repos) in enumerate(rows):
+        y0 = top - i * step
+        fig.text(0.06, y0, f"{row_total:,}", fontsize=20, fontweight='bold', color=INK, va='top')
+        fig.text(0.06, y0 - 0.058, name, fontsize=11, color=MUTED, va='top')
+        ax = fig.add_axes([0.06, y0 - 0.125, 0.88, 0.04])
+        ax.axis('off')
+        ax.set(xlim=(0, scale), ylim=(0, 1))
+        x = 0
+        for _, count in repos:
+            ax.barh(0.5, count, left=x, height=1, color=color, edgecolor='white', linewidth=1.2)
+            x += count
+        shown = repos[:3]
+        more = len(repos) - len(shown)
+        listing = '\n'.join(f"{label}  {count:,}" for label, count in shown) + (f"\n+{more} more" if more else '')
+        fig.text(0.06, y0 - 0.14, listing, fontsize=8.5, color=MUTED, va='top', linespacing=1.35)
+    fig.text(0.06, 0.035, f"Total samples: {total:,}\nLive count · {stamp}", fontsize=9, color=MUTED, va='bottom', linespacing=1.3)
+    fig.savefig('qc_counts_by_type_mobile.png', facecolor='white')
+    plt.close(fig)
+
+
 if grouped_data:
     fig, ax = plt.subplots(figsize=(24, 3.5), dpi=100)
     draw_counts(ax, grouped_data)
@@ -203,16 +290,11 @@ if grouped_data:
     plt.savefig(OUTPUT_FILENAME, bbox_inches='tight', pad_inches=0.1)
     print(f"Chart saved to {OUTPUT_FILENAME}")
 
-    fig, axes = plt.subplots(3, 1, figsize=(24, 10.5), dpi=100)
-    names = ('Healthy-human datasets', 'Patient/disease datasets', 'Animal/phantom/other datasets')
-    for i, (ax, name) in enumerate(zip(axes, names)):
-        subset = {key: value for key, value in grouped_data.items() if group_type(key) == i}
-        if subset:
-            draw_counts(ax, subset)
-        else:
-            ax.axis('off')
-            ax.text(0.5, 0.5, 'No QC datasets', ha='center', va='center', transform=ax.transAxes)
-        ax.set_title(name, fontsize=14)
-    fig.tight_layout(h_pad=3)
-    fig.savefig('qc_counts_by_type.png', bbox_inches='tight', pad_inches=0.1)
-    print("Chart saved to qc_counts_by_type.png")
+    plt.rcParams.update({'font.family': 'DejaVu Sans', 'svg.fonttype': 'none'})
+    rows = type_rows(grouped_data)
+    total = sum(r[2] for r in rows)
+    assert total == sum(item['count'] for group in grouped_data.values() for item in group)  # every sample has one type
+    stamp = pd.Timestamp.now(tz='UTC').strftime('%Y-%m-%d')
+    save_type_hero(rows, total, stamp)
+    save_type_mobile(rows, total, stamp)
+    print("Charts saved to qc_counts_by_type.png, qc_counts_by_type.svg and qc_counts_by_type_mobile.png")
