@@ -194,11 +194,14 @@ def draw_compact_counts(ax, grouped_data):
         return
 
     x, labels = 0, []
-    for (key, entries), color in zip(groups, sns.color_palette('husl', len(groups))):
+    # Muted, editorial colors: distinct hues without HUSL's high saturation.
+    colors = ('#527C99', '#65A69A', '#D6A15B', '#9986B1',
+              '#C77F78', '#91A76B', '#8B9FBA', '#B29A80')
+    for (key, entries), color in zip(groups, (colors[i % len(colors)] for i in range(len(groups)))):
         width = sum(item['count'] for item in entries)
         for j, item in enumerate(sorted(entries, key=lambda v: v['label'])):
             ax.barh(0, item['count'], left=x, height=0.24,
-                    color=adjust_lightness(color, 1 + (j % 4) * 0.04),
+                    color=adjust_lightness(color, 1 + (j % 4) * 0.015),
                     edgecolor='white', linewidth=0.2)
             x += item['count']
         if width >= total * 0.10:
