@@ -277,7 +277,7 @@ def save_type_mobile(rows, total, stamp):
         shown = repos[:3]
         more = len(repos) - len(shown)
         listing = '\n'.join(f"{label}  {count:,}" for label, count in shown) + (f"\n+{more} more" if more else '')
-        fig.text(0.06, y0 - 0.14, listing, fontsize=8.5, color=MUTED, va='top', linespacing=1.35)
+        fig.text(0.06, y0 - 0.14, listing, fontsize=10, color=MUTED, va='top', linespacing=1.35)
     fig.text(0.06, 0.035, f"Total samples: {total:,}\nLive count · {stamp}", fontsize=9, color=MUTED, va='bottom', linespacing=1.3)
     fig.savefig('qc_counts_by_type_mobile.png', facecolor='white')
     plt.close(fig)
