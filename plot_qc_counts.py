@@ -84,11 +84,11 @@ for key in list(grouped_data):
         grouped_data[base].extend(grouped_data.pop(key))
 
 # --- Prepare Aligned Data for Plotting ---
-def draw_counts(ax, grouped_data):
+def draw_counts(ax, grouped_data, palette='tab20c'):
     sorted_groups = sorted(grouped_data.items())
     labels_bg = [key for key, group in sorted_groups]
     counts_bg = [sum(item['count'] for item in group) for key, group in sorted_groups]
-    colors_bg = sns.color_palette("tab20c", len(counts_bg))
+    colors_bg = sns.color_palette(palette, len(counts_bg))
 
     counts_fg, labels_fg = [], []
     for key, group in sorted_groups:
@@ -204,15 +204,15 @@ if grouped_data:
     print(f"Chart saved to {OUTPUT_FILENAME}")
 
     fig, axes = plt.subplots(3, 1, figsize=(24, 10.5), dpi=100)
-    names = ('Healthy-human datasets', 'Patient/disease datasets', 'Animal/phantom/other datasets')
+    names = ('Normal human', 'Human patient', 'Animal / phantom / other')
     for i, (ax, name) in enumerate(zip(axes, names)):
         subset = {key: value for key, value in grouped_data.items() if group_type(key) == i}
         if subset:
-            draw_counts(ax, subset)
+            draw_counts(ax, subset, palette='husl')
         else:
             ax.axis('off')
             ax.text(0.5, 0.5, 'No QC datasets', ha='center', va='center', transform=ax.transAxes)
-        ax.set_title(name, fontsize=14)
+        ax.set_title(name, fontsize=16, fontweight='bold', pad=20)
     fig.tight_layout(h_pad=3)
     fig.savefig('qc_counts_by_type.png', bbox_inches='tight', pad_inches=0.1)
     print("Chart saved to qc_counts_by_type.png")
