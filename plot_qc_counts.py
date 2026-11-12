@@ -76,6 +76,13 @@ for asset in assets:
     except Exception as e:
         print(f"Error processing {name}: {e}")
 
+# Merge numbered repository parts (e.g., brain2 into brain) when the base exists.
+for key in list(grouped_data):
+    account, repo = key.split('_', 1)
+    base = f"{account}_{repo.rstrip('0123456789').rstrip('_')}"
+    if base != key and base in grouped_data:
+        grouped_data[base].extend(grouped_data.pop(key))
+
 # --- Prepare Aligned Data for Plotting ---
 if grouped_data:
     sorted_groups = sorted(grouped_data.items())
