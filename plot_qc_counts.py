@@ -185,6 +185,44 @@ def draw_counts(ax, grouped_data, palette='tab20c'):
         
 
 
+
+def draw_compact_counts(ax, grouped_data):
+    groups = sorted(grouped_data.items())
+    total = sum(item['count'] for _, entries in groups for item in entries)
+    if not total:
+        ax.axis('off')
+        return
+
+    x, labels = 0, []
+    for (key, entries), color in zip(groups, sns.color_palette('husl', len(groups))):
+        width = sum(item['count'] for item in entries)
+        for j, item in enumerate(sorted(entries, key=lambda v: v['label'])):
+            ax.barh(0, item['count'], left=x, height=0.24,
+                    color=adjust_lightness(color, 1 + (j % 4) * 0.04),
+                    edgecolor='white', linewidth=0.2)
+            x += item['count']
+        if width >= total * 0.10:
+            labels.append((width, key, (x - width / 2) / total))
+
+    positions = []
+    for count, key, pos in sorted(labels, reverse=True):
+        if len(positions) == 3:
+            break
+        if any(abs(pos - prev) < 0.20 for prev in positions):
+            continue
+        positions.append(pos)
+        ax.text(pos, 0.78, f"{key.replace('data-', '').replace('_', '/')}\n(n={count:,})",
+                ha='center', va='center', fontsize=11, fontweight='medium',
+                transform=ax.transAxes)
+        ax.plot([pos, pos], [0.60, 0.48], color='black', lw=0.6,
+                transform=ax.transAxes)
+
+    ax.text(0.5, 0.07, f"Total samples: {total:,}", ha='center',
+            va='center', fontsize=12, fontweight='bold', transform=ax.transAxes)
+    ax.set(xlim=(0, total), ylim=(-0.5, 0.8))
+    ax.axis('off')
+
+
 def group_type(key):
     account, repo = key.split('_', 1)
     if account == 'data-dandi':
@@ -203,16 +241,16 @@ if grouped_data:
     plt.savefig(OUTPUT_FILENAME, bbox_inches='tight', pad_inches=0.1)
     print(f"Chart saved to {OUTPUT_FILENAME}")
 
-    fig, axes = plt.subplots(3, 1, figsize=(24, 10.5), dpi=100)
+    fig, axes = plt.subplots(3, 1, figsize=(8, 6), dpi=100)
     names = ('Normal human', 'Human patient', 'Animal / phantom / other')
     for i, (ax, name) in enumerate(zip(axes, names)):
         subset = {key: value for key, value in grouped_data.items() if group_type(key) == i}
         if subset:
-            draw_counts(ax, subset, palette='husl')
+            draw_compact_counts(ax, subset)
         else:
             ax.axis('off')
             ax.text(0.5, 0.5, 'No QC datasets', ha='center', va='center', transform=ax.transAxes)
-        ax.set_title(name, fontsize=16, fontweight='bold', pad=20)
-    fig.tight_layout(h_pad=3)
-    fig.savefig('qc_counts_by_type.png', bbox_inches='tight', pad_inches=0.1)
+        ax.set_title(name, fontsize=16, fontweight='bold', pad=3)
+    fig.subplots_adjust(left=0.06, right=0.94, top=0.94, bottom=0.05, hspace=0.38)
+    fig.savefig('qc_counts_by_type.png', dpi=100)
     print("Chart saved to qc_counts_by_type.png")
