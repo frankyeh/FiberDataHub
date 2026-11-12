@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, io, requests, pandas as pd, matplotlib.pyplot as plt, seaborn as sns, numpy as np
+import os, io, sys, requests, pandas as pd, matplotlib.pyplot as plt, seaborn as sns, numpy as np
 from collections import defaultdict
 import colorsys
 
@@ -52,8 +52,9 @@ try:
     resp = requests.get(RELEASE_URL); resp.raise_for_status()
     assets = resp.json().get('assets', [])
 except requests.exceptions.RequestException as e:
-    print(f"Error fetching {RELEASE_URL}: {e}"); assets = []
+    sys.exit(f"Error fetching {RELEASE_URL}: {e}")  # no charts, so the workflow publishes nothing
 
+failed, processed = [], 0
 for asset in assets:
     name = asset.get('name')
     if not name or not name.endswith('_qc.tsv'): continue
@@ -73,8 +74,15 @@ for asset in assets:
         
         if not df.empty:
             grouped_data[key].append({'count': len(df), 'label': base_name})
+        processed += 1
     except Exception as e:
         print(f"Error processing {name}: {e}")
+        failed.append(name)
+
+# a missing table would silently lower the published counts, so stop before any chart is written
+if failed or not grouped_data:
+    sys.exit(f"QC data incomplete: {processed} tables read, {len(failed)} failed {failed}; charts not written")
+print(f"QC data complete: {processed} tables read")
 
 # Merge numbered repository parts (e.g., brain2 into brain) when the base exists.
 for key in list(grouped_data):
@@ -217,13 +225,25 @@ def type_rows(grouped_data):
 
 def draw_type_bar(ax, y, color, repos, scale, height, label_min):
     """one bar of repository segments separated by surface gaps; returns the repositories too narrow to label"""
-    x, unlabeled = 0, []
+    renderer = ax.figure.canvas.get_renderer()
+    x, unlabeled, last_right = 0, [], -1
     for label, count in repos:
         ax.barh(y, count, left=x, height=height, color=color, edgecolor='white', linewidth=1.5)
+        text = None
         if count >= label_min * scale:
-            ax.text(x + scale * 0.004, y + height / 2 + 0.06, f"{label}\n{count:,}", ha='left', va='bottom',
-                    fontsize=11, color=INK, linespacing=1.25)
-        else:
+            text = ax.text(x + scale * 0.004, y + height / 2 + 0.06, f"{label}\n{count:,}", ha='left', va='bottom',
+                           fontsize=11, color=INK, linespacing=1.25)
+            box = text.get_window_extent(renderer).transformed(ax.transData.inverted())
+            if box.x1 > scale:  # would run past the plot: right-align it to the segment's end instead
+                text.set_x(x + count - scale * 0.004)
+                text.set_ha('right')
+                box = text.get_window_extent(renderer).transformed(ax.transData.inverted())
+            if box.x0 < last_right:  # would collide with the previous label: list it after the bar instead
+                text.remove()
+                text = None
+            else:
+                last_right = box.x1 + scale * 0.01
+        if text is None:
             unlabeled.append((label, count))
         x += count
     return x, unlabeled
@@ -246,9 +266,18 @@ def save_type_hero(rows, total, stamp):
         fig.patches.append(plt.Rectangle((0.02, fy - 0.052), 0.011, 0.0275, color=color, transform=fig.transFigure))
         fig.text(0.036, fy - 0.005, name, fontsize=12, color=MUTED, va='top')
         end, rest = draw_type_bar(ax, y - 0.1, color, repos, scale, 0.34, 0.07)
-        if rest:
-            ax.text(end + scale * 0.008, y - 0.1, '  ·  '.join(f"{label} {count:,}" for label, count in rest),
-                    ha='left', va='center', fontsize=10, color=MUTED)
+        renderer = fig.canvas.get_renderer()
+        for shown in range(len(rest), 0, -1):  # list as many as fit before the plot's right edge, then "+N more"
+            listing = '  ·  '.join(f"{label} {count:,}" for label, count in rest[:shown])
+            if shown < len(rest):
+                listing += f"  ·  +{len(rest) - shown} more"
+            text = ax.text(end + scale * 0.008, y - 0.1, listing, ha='left', va='center', fontsize=10, color=MUTED)
+            if text.get_window_extent(renderer).transformed(ax.transData.inverted()).x1 <= scale:
+                break
+            text.remove()
+        else:
+            if rest:
+                ax.text(end + scale * 0.008, y - 0.1, f"+{len(rest)} more", ha='left', va='center', fontsize=10, color=MUTED)
     fig.text(0.02, 0.03, f"Total samples: {total:,} QC-passed scans in {sum(len(r[3]) for r in rows)} repository groups. "
              "Counts change as datasets are added and quality-controlled.", fontsize=10, color=MUTED)
     fig.savefig('qc_counts_by_type.png', facecolor='white')

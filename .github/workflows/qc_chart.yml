@@ -29,7 +29,10 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.PAT_TOKEN }}
       run: |
-        # --clobber swaps each asset in place, so embedded chart URLs never return 404 mid-run
+        # plot_qc_counts.py exits before writing any chart when the QC data are missing or incomplete,
+        # which fails the step above, so this upload never runs and the published charts stay. --clobber replaces each asset by name
+        # (GitHub deletes the old file, then stores the new one), so a request during that swap can still miss.
+        shopt -s nullglob
         for f in *.png *.svg; do
           echo "Uploading $f"
           gh release upload qc-chart "$f" --clobber \
@@ -57,6 +60,7 @@ jobs:
         python plot_qc_plots.py        
         
     - name: Remove & Re-upload QC TSVs via GH CLI
+      # deletes each chart before re-uploading it, so its URL is missing until the upload finishes
       env:
         GH_TOKEN: ${{ secrets.PAT_TOKEN }}
       run: |
