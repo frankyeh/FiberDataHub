@@ -49,7 +49,9 @@ def resolve_overlaps(nodes, min_dist):
 grouped_data = defaultdict(list)
 
 try:
-    resp = requests.get(RELEASE_URL); resp.raise_for_status()
+    token = os.getenv('PAT_TOKEN')
+    headers = {'Authorization': f'Bearer {token}'} if token else {}
+    resp = requests.get(RELEASE_URL, headers=headers); resp.raise_for_status()
     assets = resp.json().get('assets', [])
 except requests.exceptions.RequestException as e:
     sys.exit(f"Error fetching {RELEASE_URL}: {e}")  # no charts, so the workflow publishes nothing

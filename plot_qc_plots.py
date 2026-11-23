@@ -1,12 +1,14 @@
-import requests, pandas as pd, matplotlib.pyplot as plt, seaborn as sns, numpy as np, matplotlib.colors as mcolors, math
+import os, requests, pandas as pd, matplotlib.pyplot as plt, seaborn as sns, numpy as np, matplotlib.colors as mcolors, math
 import io # Added for StringIO
 
 def get_qc_asset_links(repo):
     """Fetches download links for QC TSV assets from a specific release tag."""
     release_tag = "qc-data"
     url = f"https://api.github.com/repos/{repo}/releases/tags/{release_tag}"
+    token = os.getenv("PAT_TOKEN")
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
     try:
-        resp = requests.get(url)
+        resp = requests.get(url, headers=headers)
         resp.raise_for_status() # Raise an exception for bad status codes
         # Return a dictionary mapping asset name (without _qc.tsv) to download URL
         return {a["name"].replace("_qc.tsv", ""): a["browser_download_url"]
@@ -478,10 +480,12 @@ def plot_multi_account_releases(account_configs):
 # Define the accounts to plot and the desired chunk size (number of tags per plot panel) for each account.
 # The chunk size applies to the number of tag_suffixes plotted together within an (account, repo) group chunk.
 accounts_to_plot = {
-    "data-hcp": 5, # Plot max 4 tags per panel for data-hcp groups (e.g., data-hcp/lifespan)
-    "data-nih": 10, # Plot max 4 tags per panel for data-hcp groups (e.g., data-hcp/lifespan)
-    "data-openneuro": 10, # Plot max 10 tags per panel for data-openneuro groups (e.g., data-openneuro/ds001)
+    "data-hcp": 5, # Plot max 5 tags per panel for data-hcp groups (e.g., data-hcp/lifespan)
+    "data-nih": 10,
+    "data-openneuro": 10,
     "data-indi": 10,
+    "data-dandi": 10,
+    "data-nitrc": 10,
     "data-others": 7
 }
 

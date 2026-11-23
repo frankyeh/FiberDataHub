@@ -20,7 +20,7 @@ jobs:
       run: |
         set -euo pipefail
         mkdir -p qc_files
-        accounts=(data-hcp data-nih data-openneuro data-indi data-others)
+        accounts=(data-hcp data-nih data-openneuro data-indi data-dandi data-nitrc data-others)
     
         # GraphQL requires a token
         auth=(-H "Authorization: Bearer $PAT_TOKEN")
