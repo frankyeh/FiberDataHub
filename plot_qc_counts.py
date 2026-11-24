@@ -111,6 +111,7 @@ def draw_counts(ax, grouped_data):
 
     # 1. Draw BACKGROUND bars and create the color map
     x_pos_bg, grand_total_bg = 0, sum(counts_bg)
+    ax.set(xlim=(-grand_total_bg * 0.03, grand_total_bg * 1.03))
     color_map = []
     label_toggle = False
 
@@ -119,7 +120,7 @@ def draw_counts(ax, grouped_data):
     for ct, col, lbl in zip(counts_bg, colors_bg, labels_bg):
         color_map.append({'end': x_pos_bg + ct, 'color': col})
         
-        if ct > 100:
+        if ct > 0:
             center_x = x_pos_bg + ct / 2
             y_offset = 0.45
             y_txt, is_top = (2 + y_offset, False) if label_toggle else (2 - y_offset, True)
@@ -147,14 +148,14 @@ def draw_counts(ax, grouped_data):
     upper_row = [n for n in text_candidates if n['y'] > 2]
     lower_row = [n for n in text_candidates if n['y'] < 2]
     
-    # Set minimum distance to 5.5% of total width
-    min_dist = grand_total_bg * 0.055 
+    # Set minimum distance to 4.8% of total width
+    min_dist = grand_total_bg * 0.048 
     
     upper_row = resolve_overlaps(upper_row, min_dist)
     lower_row = resolve_overlaps(lower_row, min_dist)
     
     for node in upper_row + lower_row:
-        ax.text(node['x'], node['y'], node['text'], ha="center", va="center", fontsize=12)
+        ax.text(node['x'], node['y'], node['text'], ha="center", va="center", fontsize=10.5)
         
         # Draw connecting line if moved significantly
         if abs(node['x'] - node['orig_x']) > (grand_total_bg * 0.01):
@@ -279,7 +280,8 @@ def save_type_hero(rows, total, stamp):
             text.remove()
         else:
             if rest:
-                ax.text(end + scale * 0.008, y - 0.1, f"+{len(rest)} more", ha='left', va='center', fontsize=10, color=MUTED)
+                listing = '  ·  '.join(f"{label} {count:,}" for label, count in rest)
+                ax.text(scale, y - 0.33, listing, ha='right', va='top', fontsize=10, color=MUTED)
     fig.text(0.02, 0.03, f"Total samples: {total:,} QC-passed scans in {sum(len(r[3]) for r in rows)} repository groups. "
              "Counts change as datasets are added and quality-controlled.", fontsize=10, color=MUTED)
     fig.savefig('qc_counts_by_type.png', facecolor='white')
